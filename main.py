@@ -15,10 +15,40 @@
 # limitations under the License.
 #
 import webapp2
+import json
+from google.appengine.api import urlfetch
+
+api_key = '887bbc50dcce4a987a6ea96172cfe698'
+base_url = 'http://ws.audioscrobbler.com/2.0/?format=json'
+get_recent_tracks = 'user.getrecenttracks'
 
 class MainHandler(webapp2.RequestHandler):
+    
     def get(self):
-        self.response.write('Hello world!')
+        #TODO: add a form to enter this in the page
+        user = 'colinmgibbs'
+        num_tracks = '200'
+        full_url = base_url + '&api_key=' + api_key + '&user=' + user + \
+            '&method=' + get_recent_tracks + '&limit=' + num_tracks
+        
+        try:
+            response = urlfetch.fetch(
+            url = full_url,
+            method = urlfetch.GET
+        )
+        except urlfetch.SSLCertificateError:
+            pass
+        
+        full_json = json.loads(response.content)
+        track_list = full_json['recenttracks']['track']
+        
+        self.response.write('Last 200 songs played by: ' + user + '<br><br>')
+        
+        for x in track_list:
+            title = x['name']
+            artist = x['artist']['#text']
+            
+            self.response.write(artist + ' - ' + title + '<br>')
 
 app = webapp2.WSGIApplication([
     ('/', MainHandler)
