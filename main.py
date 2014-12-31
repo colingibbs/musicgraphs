@@ -16,7 +16,9 @@
 #
 import webapp2
 import json
+import logging
 from google.appengine.api import urlfetch
+from datetime import datetime
 
 api_key = '887bbc50dcce4a987a6ea96172cfe698'
 base_url = 'http://ws.audioscrobbler.com/2.0/?format=json'
@@ -28,27 +30,56 @@ class MainHandler(webapp2.RequestHandler):
         #TODO: add a form to enter this in the page
         user = 'colinmgibbs'
         num_tracks = '200'
-        full_url = base_url + '&api_key=' + api_key + '&user=' + user + \
-            '&method=' + get_recent_tracks + '&limit=' + num_tracks
+        page = 1
+        track_count = 1
+        retries = 0
         
-        try:
-            response = urlfetch.fetch(
-            url = full_url,
-            method = urlfetch.GET
-        )
-        except urlfetch.SSLCertificateError:
-            pass
+        self.response.write('All songs played by: ' + user + '<br><br>')
         
-        full_json = json.loads(response.content)
-        track_list = full_json['recenttracks']['track']
+        end_date = datetime(2014, 12, 1)
+        track_date = datetime(2020, 12, 31)
         
-        self.response.write('Last 200 songs played by: ' + user + '<br><br>')
-        
-        for x in track_list:
-            title = x['name']
-            artist = x['artist']['#text']
+        while (track_date >= end_date and retries <= 10):
+            logging.debug('Requestiog page %s of tracks', str(page))
+            full_url = base_url + '&api_key=' + api_key + '&user=' + user + \
+            '&method=' + get_recent_tracks + '&limit=' + num_tracks + '&page=' + \
+            str(page)
             
-            self.response.write(artist + ' - ' + title + '<br>')
+            try:
+                response = urlfetch.fetch(url=full_url, method=urlfetch.GET, deadline=60)
+            except urlfetch.DeadlineExceededError:
+                self.response.write('<br><br>Deadline Exceeded error<br><br>')
+                return
+            except urlfetch.DownloadError:
+                retries += 1
+                logging.debug('Got a Download error. Number of retries: ' + str(retries))
+                continue
+			
+            if response.status_code == 503:
+                retries += 1
+                logging.debug('Got a 503. Number of retries: ' + str(retries))
+                continue
+			
+            try:
+                full_json = json.loads(response.content)
+                track_list = full_json['recenttracks']['track']
+            except ValueError:
+                self.response.write('<br><br>Value error<br><br>')
+                self.response.write(response.content)
+                return
+            
+            for x in track_list:
+                title = x['name']
+                artist = x['artist']['#text']
+                album = x['album']['#text']
+                track_date = datetime.utcfromtimestamp(float(x['date']['uts']))
+                
+                self.response.write(str(track_count) + '. ' + artist + ' - ' + title + \
+                ' - ' + str(track_date.month) + '/' + str(track_date.day) + '/' + \
+                str(track_date.year) + '<br>')
+                track_count += 1
+            page += 1
+            retries = 0
 
 app = webapp2.WSGIApplication([
     ('/', MainHandler)
