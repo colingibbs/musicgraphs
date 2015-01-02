@@ -1,23 +1,8 @@
-#!/usr/bin/env python
-#
-# Copyright 2007 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
 import webapp2
 import json
 import logging
 import calendar
+import cgi
 from google.appengine.api import urlfetch
 from google.appengine.ext import db
 from google.appengine.ext.db import GqlQuery
@@ -27,11 +12,11 @@ api_key = '887bbc50dcce4a987a6ea96172cfe698'
 base_url = 'http://ws.audioscrobbler.com/2.0/?format=json'
 get_recent_tracks = 'user.getrecenttracks'
 
-class MainHandler(webapp2.RequestHandler):
+class GenerateStats(webapp2.RequestHandler):
     
-    def get(self):
+    def post(self):
         #TODO: add a form to enter this in the page
-        user = 'colinmgibbs'
+        user = cgi.escape(self.request.get('username'))
         q = GqlQuery("SELECT * FROM Listen WHERE user = '" + user + "'")
         
         if q.count() == 0:
@@ -41,7 +26,7 @@ class MainHandler(webapp2.RequestHandler):
             logging.info('Already have data for user %s in datastore. Not' + \
             ' fetching any new data from Last.fm', user)
         
-        for y in range(1,13):
+        for y in range(1, 13):
             plays = 0
             artists = dict()
             
@@ -59,8 +44,8 @@ class MainHandler(webapp2.RequestHandler):
             self.response.write('<br><br>Top artists:<br>')
             
             sorted_artists = sorted(artists, key=artists.get, reverse=True)
-            for z in range(1,6):
-                self.response.write(str(z) + '. ' + sorted_artists[z].encode('utf-8') + ': ' + \
+            for z in range(0, 10):
+                self.response.write(str(z+1) + '. ' + sorted_artists[z].encode('utf-8') + ': ' + \
                 str(artists[sorted_artists[z]]) + '<br>')
             self.response.write('<br><br>')
         
@@ -80,7 +65,7 @@ class MainHandler(webapp2.RequestHandler):
             str(page)
             
             try:
-                response = urlfetch.fetch(url=full_url, method=urlfetch.GET, deadline=60)
+                response = urlfetch.fetch(url=full_url, method=urlfetch.GET, deadline=30)
             except urlfetch.DeadlineExceededError:
                 self.response.write('<br><br>Deadline Exceeded error<br><br>')
                 return
@@ -120,8 +105,18 @@ class MainHandler(webapp2.RequestHandler):
             page += 1
             retries = 0
 
+class GetUser(webapp2.RequestHandler):
+    def get(self):
+        self.response.write(""" \
+        <form action="/stats" method="post">
+          <div><input type="text" name="username"></div>
+          <div><input type="submit" value="Enter Last.fm username"></div>
+        </form>
+        """)
+
 app = webapp2.WSGIApplication([
-    ('/', MainHandler)
+    ('/', GetUser),
+    ('/stats', GenerateStats)
 ], debug=True)
 
 class Listen(db.Model):
