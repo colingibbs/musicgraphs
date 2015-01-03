@@ -15,7 +15,7 @@ get_recent_tracks = 'user.getrecenttracks'
 class GenerateStats(webapp2.RequestHandler):
     
     def post(self):
-        #TODO: add a form to enter this in the page
+        #TODO: add comments
         user = cgi.escape(self.request.get('username'))
         q = GqlQuery("SELECT * FROM Listen WHERE user = '" + user + "'")
         
@@ -31,7 +31,7 @@ class GenerateStats(webapp2.RequestHandler):
             artists = dict()
             
             for x in q:
-                if x.time.month == y and x.time.year == 2014:
+                if x.time.month == y:
                     plays += 1
                     if x.artist not in artists:
                         artists[x.artist] = 1
@@ -52,8 +52,10 @@ class GenerateStats(webapp2.RequestHandler):
     def get_listens_from_last_fm(self, user):
         num_tracks = '200'
         page = 1
-        track_count = 1
         retries = 0
+        
+        #list to store all the track listens before writing to the datastore
+        listens = []
         
         end_date = datetime(2014, 1, 1)
         track_date = datetime(2020, 12, 31)
@@ -96,21 +98,25 @@ class GenerateStats(webapp2.RequestHandler):
                 album_mbid = x['album']['mbid']
                 track_date = datetime.utcfromtimestamp(float(x['date']['uts']))
                 
-                l = Listen(user = user, track=track, artist=artist, album=album, \
-                time=track_date, mbid=mbid, artist_mbid=artist_mbid, album_mbid=album_mbid)
-                l.put()
+                #only save listens from 2014
+                if track_date.year == 2014:
+                    l = Listen(user = user, track=track, artist=artist, album=album, \
+                    time=track_date, mbid=mbid, artist_mbid=artist_mbid, album_mbid=album_mbid)
                 
-                
-                track_count += 1
+                    listens.append(l)
             page += 1
-            retries = 0
+            retries = 0    
+        
+        logging.info('Finished fetching from Last.fm. Writing all listens to the datastore')
+        db.put(listens)
 
 class GetUser(webapp2.RequestHandler):
     def get(self):
         self.response.write(""" \
+        Enter Last.fm username
         <form action="/stats" method="post">
           <div><input type="text" name="username"></div>
-          <div><input type="submit" value="Enter Last.fm username"></div>
+          <div><input type="submit" value="Submit"></div>
         </form>
         """)
 
