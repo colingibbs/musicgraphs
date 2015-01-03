@@ -4,6 +4,7 @@ import logging
 import calendar
 import cgi
 from google.appengine.api import urlfetch
+from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from google.appengine.ext.db import GqlQuery
 from datetime import datetime
@@ -17,11 +18,13 @@ class GenerateStats(webapp2.RequestHandler):
     def post(self):
         #TODO: add comments
         user = cgi.escape(self.request.get('username'))
-        q = GqlQuery("SELECT * FROM Listen WHERE user = '" + user + "'")
+        q = GqlQuery("SELECT time, artist FROM Listen WHERE user = '" + user + "'")
         
         if q.count() == 0:
             logging.info('Fetching data for user: %s', user)
-            self.get_listens_from_last_fm(user=user)
+            taskqueue.add(url='/fetchdata', params={'username': user})
+            self.response.write('Fetching data for user ' + user + '. Please wait')
+            return
         else:
             logging.info('Already have data for user %s in datastore. Not' + \
             ' fetching any new data from Last.fm', user)
@@ -49,10 +52,12 @@ class GenerateStats(webapp2.RequestHandler):
                 str(artists[sorted_artists[z]]) + '<br>')
             self.response.write('<br><br>')
         
-    def get_listens_from_last_fm(self, user):
+class FetchDataFromLastFM(webapp2.RequestHandler):
+    def post(self):
         num_tracks = '200'
         page = 1
         retries = 0
+        user = cgi.escape(self.request.get('username'))
         
         #list to store all the track listens before writing to the datastore
         listens = []
@@ -61,13 +66,13 @@ class GenerateStats(webapp2.RequestHandler):
         track_date = datetime(2020, 12, 31)
         
         while (track_date >= end_date and retries <= 10):
-            logging.info('Requestiog page %s of tracks', str(page))
+            logging.info('Requesting page %s of tracks', str(page))
             full_url = base_url + '&api_key=' + api_key + '&user=' + user + \
             '&method=' + get_recent_tracks + '&limit=' + num_tracks + '&page=' + \
             str(page)
             
             try:
-                response = urlfetch.fetch(url=full_url, method=urlfetch.GET, deadline=30)
+                response = urlfetch.fetch(url=full_url, method=urlfetch.GET, deadline=60)
             except urlfetch.DeadlineExceededError:
                 self.response.write('<br><br>Deadline Exceeded error<br><br>')
                 return
@@ -122,7 +127,8 @@ class GetUser(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
     ('/', GetUser),
-    ('/stats', GenerateStats)
+    ('/stats', GenerateStats),
+    ('/fetchdata', FetchDataFromLastFM)
 ], debug=True)
 
 class Listen(db.Model):
