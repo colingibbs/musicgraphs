@@ -18,9 +18,9 @@ class GenerateStats(webapp2.RequestHandler):
     def post(self):
         #TODO: add comments
         user = cgi.escape(self.request.get('username'))
-        q = GqlQuery("SELECT time, artist FROM Listen WHERE user = '" + user + "'")
+        q = GqlQuery("SELECT artist, time FROM Listen WHERE user = '" + user + "'")
         
-        if q.count() == 0:
+        if q.count(limit=1) == 0:
             logging.info('Fetching data for user: %s', user)
             taskqueue.add(url='/fetchdata', params={'username': user})
             self.response.write('Fetching data for user ' + user + '. Please wait')
@@ -30,6 +30,7 @@ class GenerateStats(webapp2.RequestHandler):
             ' fetching any new data from Last.fm', user)
         
         for y in range(1, 13):
+            logging.info('Getting stats for month ' + str(y))
             plays = 0
             artists = dict()
             

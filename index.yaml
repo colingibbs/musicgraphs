@@ -12,6 +12,24 @@ indexes:
 
 - kind: Listen
   properties:
+  - name: time.month
   - name: user
   - name: artist
   - name: time
+
+- kind: Listen
+  properties:
+  - name: user
+  - name: artist
+  - name: time
+
+- kind: Listen
+  properties:
+  - name: user
+  - name: time
+
+- kind: Listen
+  properties:
+  - name: user
+  - name: time
+  - name: artist
